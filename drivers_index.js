@@ -12,7 +12,7 @@ var http = require('http'),
 		cookie: { maxAge: 60000 }
 	}),
 	socketsParams = {},
-	custom = require('./dispatch_custom'), 
+	custom = require('./drivers_custom'), 
 	s = 'Str a = ${a.b}';
 	
 	var 
@@ -382,11 +382,8 @@ io.sockets.on('connection', function (socket) {
 			queryRequest('SELECT dbo.GetJSONSectorList(' + userId + ') as JSON_DATA',
 				function (recordset) {
 					if (recordset && recordset.recordset) {
-						socket.emit('sectors', {
-							userId: userId,
-							sectors: recordset.recordset[0].JSON_DATA
-						});
-						console.log(recordset.recordset[0].JSON_DATA);
+						socket.emit('sectors', JSON.parse(recordset.recordset[0].JSON_DATA));
+						console.log('sectors: ' + recordset.recordset[0].JSON_DATA);
 					}
 				},
 				function (err) {
@@ -467,7 +464,7 @@ io.sockets.on('connection', function (socket) {
 	};
 
 	function identDBConnectCallback() {
-		queryRequest('SELECT TOP 1 web_protected_code FROM Objekt_vyborki_otchyotnosti ' +
+		queryRequest('SELECT TOP 1 web_protected_code, use_driver_socket_server FROM Objekt_vyborki_otchyotnosti ' +
 			' WHERE Tip_objekta = \'for_drivers\' ',
 			function (recordset) {
 				if (recordset && recordset.recordset &&
@@ -488,6 +485,11 @@ io.sockets.on('connection', function (socket) {
 								}
 								
 								socketsParams[socket.id]['userId'] = userId;
+								
+								socket.emit('auth', {
+									userId: userId
+								});
+								console.log('emit auth');
 								
 								emitData('sectors');
 								console.log('emit sectors');
