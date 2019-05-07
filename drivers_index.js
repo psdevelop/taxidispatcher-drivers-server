@@ -390,6 +390,18 @@ io.sockets.on('connection', function (socket) {
 					console.log('Error of sectors get: ' + err);
 				}, 
 				connection);
+		} else if (entity.indexOf('tarifs_and_options') === 0) {
+			queryRequest('SELECT dbo.GetJSONTarifAndOptionsList(' + userId + ') as JSON_DATA',
+				function (recordset) {
+					if (recordset && recordset.recordset) {
+						socket.emit('tarifs_and_options', JSON.parse(recordset.recordset[0].JSON_DATA));
+						console.log('tarifs_and_options: ' + recordset.recordset[0].JSON_DATA);
+					}
+				},
+				function (err) {
+					console.log('Error of tarifs_and_options get: ' + err);
+				}, 
+				connection);
 		} else if (entity.indexOf('orders_coordinates') === 0) {
 			var whereClause = ' where Zavershyon = 0 AND Arhivnyi = 0 AND (NOT (ISNULL(rclient_lat, \'\') = \'\' OR ISNULL(rclient_lon, \'\') = \'\') OR NOT (ISNULL(adr_detect_lat, \'\') = \'\' OR ISNULL(adr_detect_lon, \'\') = \'\'))';
 			//console.log('orders_coordinates');
@@ -493,6 +505,9 @@ io.sockets.on('connection', function (socket) {
 								
 								emitData('sectors');
 								console.log('emit sectors');
+								
+								emitData('tarifs_and_options');
+								console.log('emit tarifs_and_options');
 								//setInterval(checkDriversCoordsUpdated, 10000);
 							}
 						},
