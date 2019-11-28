@@ -12,12 +12,13 @@ var http = require('http'),
 		cookie: { maxAge: 60000 }
 	}),
 	socketsParams = {},
-	custom = require('./drivers_custom'), 
+	custom = require('./drivers_custom'),
+	dbCommon = require('../taxidispatcher-web-common/db'),
 	s = 'Str a = ${a.b}';
-	
-	var 
+
+	var
 	a = { b: 3}
-	
+
 	console.log(eval('`' + s + '`'));
 	//sharedsession = require("express-socket.io-session");
 
@@ -118,7 +119,7 @@ function hasSocketWithUserId(userId) {
 }
 
 setInterval(checkSocketClients, 60000);
-	
+
 function queryRequest(sqlText, callbackSuccess, callbackError, connection) {
 		var request = new sql.Request(connection);
 		request.query(sqlText, function (err, recordset) {
@@ -131,6 +132,117 @@ function queryRequest(sqlText, callbackSuccess, callbackError, connection) {
 			}
 		});
 	}
+
+//модуль работы с массивом водителей
+(function() {
+
+	var useFordWbroadcast = false, //use_ford_wbroadcast
+		hasFordWbroadcast = false, //has_ford_wbroadcast
+		fordersWbroadcast = '', driverSocket; //forders_wbroadcast
+
+	var connectionWbroadcast, createWBConnection = function() {
+				connectonAttempts++;
+				if (connectonAttempts > 5) {
+					return;
+				}
+
+				connectionWbroadcast = createWBroadcastConnPool(
+					config,
+					function() {
+						console.log('Success db-connection of Wbroadcast module!');
+						setInterval(checkDriversSockets, 10000);
+					}
+				);
+			}, connectonAttempts = 0, broadcastIsProcessing = false;
+
+		createWBConnection();
+
+		function createWBroadcastConnPool(connConfig, callBack) {
+			return new sql.ConnectionPool(connConfig, function (err) {
+				// ... error checks
+				if (err) {
+					console.log('Err of create Wbroadcast db pool' + err.message);                      // Canceled.
+					console.log(err.code);
+					console.log('Next connection attempt after 60 sec...');
+					setTimeout(createWBConnection, 60000);
+				} else {
+					callBack && callBack();
+				}
+			});
+		}
+
+	function checkDriversSockets() {
+		useFordWbroadcast = false;
+		hasFordWbroadcast = false;
+		fordersWbroadcast = '';
+
+		if (broadcastIsProcessing) {
+			console.log('FordWbroadcast in processing! Next check after 10 sec...');
+			return;
+		}
+
+		broadcastIsProcessing = true;
+		checkSystemSettings(function() {
+			if (useFordWbroadcast && hasFordWbroadcast && fordersWbroadcast) {
+				console.log('fordersWbroadcasting: ' + fordersWbroadcast);
+
+				for (socketId in socketsParams) {
+					driverSocket = socketsParams[socketId].socket;
+					driverId = socketsParams[socketId].userId;
+					driverNum = socketsParams[socketId].driverNum;
+					if (driverSocket && driverId && driverNum) {
+						console.log('useFordWbroadcast userId: ' + driverId + ', driverNum: ' + driverNum);
+						driverSocket.emit('forders_wbroadcast', fordersWbroadcast);
+					}
+				}
+
+				queryRequest('UPDATE Objekt_vyborki_otchyotnosti SET has_ford_wbroadcast=0, ' +
+					'forders_wbroadcast=\'\' WHERE Tip_objekta=\'for_drivers\';',
+					function (recordset) {
+						broadcastIsProcessing = false;
+					},
+					function (err) {
+						console.log('Err of reset has_ford_wbroadcast settings! ' + err);
+						broadcastIsProcessing = false;
+					},
+					connectionWbroadcast
+				);
+
+			} else {
+				broadcastIsProcessing = false;
+				console.log('useFordWbroadcast is off! Next check after 10 sec...');
+			}
+		});
+	}
+
+	function checkSystemSettings(callBack) {
+		queryRequest('SELECT TOP 1 use_ford_wbroadcast, has_ford_wbroadcast, ' +
+			'forders_wbroadcast FROM Objekt_vyborki_otchyotnosti WHERE Tip_objekta=\'for_drivers\';',
+			function (recordset) {
+				if (recordset && recordset.recordset &&
+					recordset.recordset.length &&
+					recordset.recordset.length == 1) {
+					var settingsList = recordset.recordset;
+					//console.log(sectorCoordsList);
+					settingsList.forEach(function(setting) {
+						useFordWbroadcast = setting.use_ford_wbroadcast;
+						hasFordWbroadcast = setting.has_ford_wbroadcast;
+						fordersWbroadcast = setting.forders_wbroadcast;
+					});
+
+					callBack && callBack();
+				}
+			},
+			function (err) {
+				console.log('Err of check Wbroadcast settings! ' + err);
+				console.log('Next attempt after 10 sec...');
+				broadcastIsProcessing = false;
+			},
+			connectionWbroadcast
+		);
+	}
+
+})();
 
 io.sockets.on('connection', function (socket) {
 	console.log('New sock id: ' + socket.id);
@@ -214,9 +326,9 @@ io.sockets.on('connection', function (socket) {
 				},
 			]
 		};
-		
+
 	function getDependListData(entityDependenciesList, callBack, dependData) {
-		
+
 		if (entityDependenciesList && entityDependenciesList.length) {
 			var request = new sql.Request(connection);
 			request.query('select * FROM ' + entityDependenciesList[0].list, //
@@ -227,7 +339,7 @@ io.sockets.on('connection', function (socket) {
 						return;
 					}
 					dependData[entityDependenciesList[0].link] = recordset.recordset;
-					
+
 					if (entityDependenciesList.length > 1) {
 						entityDependenciesList.splice(0,1);
 						getDependListData(entityDependenciesList, callBack, dependData);
@@ -237,14 +349,14 @@ io.sockets.on('connection', function (socket) {
 				});
 		}
 	}
-		
+
 	function getEntityDependData(entity, callBack) {
 		var dependData = {},
-			entityDependenciesList = entityDependencies[entity] && 
+			entityDependenciesList = entityDependencies[entity] &&
 				entityDependencies[entity].filter(function(dependency) {
-					return dependency.type === 'relation';  
+					return dependency.type === 'relation';
 				});
-		
+
 		getDependListData(entityDependenciesList, callBack, dependData);
 		//callBack([]);
 	}
@@ -253,15 +365,15 @@ io.sockets.on('connection', function (socket) {
 		if (!options) {
 			return '';
 		}
-	
-		
+
+
 		var dependencies = condDependencies, dependStr = '',
 			isInjectedOptions = false, i;
-		
+
 		console.log('len=' + dependencies.length);
 		console.log('options: ');
 		console.log(options);
-		
+
 		for (i in options) {
 			dependencies = dependencies.filter(function(dependency) {
 				return (typeof dependency[i] !== 'undefined') && (dependency[i] === options[i] || dependency[i] === 'NONE' || dependency[i] === 'INJECT');
@@ -273,14 +385,14 @@ io.sockets.on('connection', function (socket) {
 				}).length;
 			}
 		}
-		
+
 		isInjectedOptions && console.log('is injected!');
-		
+
 		dependencies.forEach(function(dependency) {
-			if (!isInjectedOptions || 
+			if (!isInjectedOptions ||
 				validateDependencyOptions(dependency, options)) {
 
-				dependStr += isInjectedOptions 
+				dependStr += isInjectedOptions
 					? eval('`' + dependency.injectExpression + '`')
 					: dependency.injectExpression;
 			}
@@ -288,18 +400,18 @@ io.sockets.on('connection', function (socket) {
 
 		return dependStr;
 	}
-	
+
 	function validateDependencyOptions(dependency, options) {
 		for (i in dependency) {
-			
-			if (dependency[i] === 'INJECT' && options && 
+
+			if (dependency[i] === 'INJECT' && options &&
 				(typeof options[i] === 'undefined')) {
 				return false;
 			}
 		}
 		return true;
 	}
-		
+
 	function decReqTimeout() {
 		if (reqTimeout > 0)
 			reqTimeout--;
@@ -332,7 +444,7 @@ io.sockets.on('connection', function (socket) {
 	}
 
 	var connection = createDBConnPool(socketDBConfig);
-	
+
 	function createDBConnPool(connConfig, callBack) {
 		return new sql.ConnectionPool(connConfig, function (err) {
 			// ... error checks
@@ -344,10 +456,10 @@ io.sockets.on('connection', function (socket) {
 			}
 		});
 	}
-	
+
 	function dependencyExpression(optionsArray) {
 		var dependOptions = {};
-		
+
 		optionsArray.forEach(function(optionItem) {
 			Object.assign(
 				dependOptions, optionItem)
@@ -372,7 +484,7 @@ io.sockets.on('connection', function (socket) {
 					socket.emit('orders', {
 						userId: userId,
 						orders: recordset && recordset.recordset,
-						depends: dependData 
+						depends: dependData
 					});
 				});
 			};
@@ -388,7 +500,7 @@ io.sockets.on('connection', function (socket) {
 				},
 				function (err) {
 					console.log('Error of sectors get: ' + err);
-				}, 
+				},
 				connection);
 		} else if (entity.indexOf('tarifs_and_options') === 0) {
 			queryRequest('SELECT dbo.GetJSONTarifAndOptionsList(' + userId + ') as JSON_DATA',
@@ -400,15 +512,15 @@ io.sockets.on('connection', function (socket) {
 				},
 				function (err) {
 					console.log('Error of tarifs_and_options get: ' + err);
-				}, 
+				},
 				connection);
 		} else if (entity.indexOf('orders_coordinates') === 0) {
 			var whereClause = ' where Zavershyon = 0 AND Arhivnyi = 0 AND (NOT (ISNULL(rclient_lat, \'\') = \'\' OR ISNULL(rclient_lon, \'\') = \'\') OR NOT (ISNULL(adr_detect_lat, \'\') = \'\' OR ISNULL(adr_detect_lon, \'\') = \'\'))';
 			//console.log('orders_coordinates');
-			queryRequest('select BOLD_ID as id, (CASE WHEN (ISNULL(rclient_lat, \'\') <> \'\') THEN rclient_lat ELSE adr_detect_lat END) as lat, (CASE WHEN (ISNULL(rclient_lat, \'\') <> \'\') THEN rclient_lon ELSE adr_detect_lon END) as lon, Adres_vyzova_vvodim as addr, vypolnyaetsya_voditelem FROM Zakaz' + whereClause, 
+			queryRequest('select BOLD_ID as id, (CASE WHEN (ISNULL(rclient_lat, \'\') <> \'\') THEN rclient_lat ELSE adr_detect_lat END) as lat, (CASE WHEN (ISNULL(rclient_lat, \'\') <> \'\') THEN rclient_lon ELSE adr_detect_lon END) as lon, Adres_vyzova_vvodim as addr, vypolnyaetsya_voditelem FROM Zakaz' + whereClause,
 				function (recordset) {
 					//console.log(recordset.recordset);
-					recordset && recordset.recordset && socket.emit('orders_coordinates', 
+					recordset && recordset.recordset && socket.emit('orders_coordinates',
 						{
 							userId: userId,
 							orders: recordset && recordset.recordset
@@ -416,11 +528,11 @@ io.sockets.on('connection', function (socket) {
 				},
 				function (err) {
 					console.log(err);
-				}, 
+				},
 				connection);
 		}
 	}
-	
+
 	socket.on('app-state', function (data) {
 		//console.log('app-state');
 		if (data) {
@@ -482,30 +594,32 @@ io.sockets.on('connection', function (socket) {
 				if (recordset && recordset.recordset &&
 					recordset.recordset.length) {
 
-					queryRequest('SELECT TOP 1 BOLD_ID FROM Voditelj ' +
-						' WHERE REMOTE_LOGIN = \'' + user + 
+					queryRequest('SELECT TOP 1 BOLD_ID, Pozyvnoi FROM Voditelj ' +
+						' WHERE REMOTE_LOGIN = \'' + user +
 						'\' AND REMOTE_PASSWORD = \'' + password + '\'',
 						function (recordset) {
 							if (recordset && recordset.recordset &&
 								recordset.recordset.length) {
 
 								userId = recordset.recordset[0].BOLD_ID;
-								
+
 								if (hasSocketWithUserId(userId)) {
 									abortConnection('Данный водитель уже подключен!');
 									return;
 								}
-								
+
 								socketsParams[socket.id]['userId'] = userId;
-								
+								socketsParams[socket.id]['socketObject'] = socket;
+								socketsParams[socket.id]['driverNum'] = recordset.recordset[0].Pozyvnoi;
+
 								socket.emit('auth', {
 									userId: userId
 								});
 								console.log('emit auth');
-								
+
 								emitData('sectors');
 								console.log('emit sectors');
-								
+
 								emitData('tarifs_and_options');
 								console.log('emit tarifs_and_options');
 								//setInterval(checkDriversCoordsUpdated, 10000);
@@ -517,7 +631,7 @@ io.sockets.on('connection', function (socket) {
 				}
 			},
 			function (err) {
-			}, 
+			},
 			connection);
 
 		/*if (authTimeout <= 0) {
@@ -564,7 +678,7 @@ io.sockets.on('connection', function (socket) {
 		password = data.psw;
 		identDBConnectCallback();
 	});
-	
+
 	function abortConnection(abortMsg) {
 		socket.emit('abort_connection', {
 			msg: abortMsg,
@@ -627,7 +741,7 @@ io.sockets.on('connection', function (socket) {
 			wherePhrase = ' WHERE BOLD_ID = ',
 			conditionQuery = dependencyExpression([{type: 'dataUpdate',
 				staticExpression: 'ORDER_DRNUM'}, data]);
-				
+
 		if (!conditionQuery) {
 			for (i in data) {
 				if (counter > 0) {
