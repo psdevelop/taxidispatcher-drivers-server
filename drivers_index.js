@@ -187,12 +187,13 @@ function queryRequest(sqlText, callbackSuccess, callbackError, connection) {
 				console.log('fordersWbroadcasting: ' + fordersWbroadcast);
 
 				for (socketId in socketsParams) {
-					driverSocket = socketsParams[socketId].socket;
+					driverSocket = socketsParams[socketId].socketObject;
 					driverId = socketsParams[socketId].userId;
 					driverNum = socketsParams[socketId].driverNum;
+					console.log('useFordWbroadcast userId: ' + driverId + ', driverNum: ' + driverNum);
 					if (driverSocket && driverId && driverNum) {
-						console.log('useFordWbroadcast userId: ' + driverId + ', driverNum: ' + driverNum);
-						driverSocket.emit('forders_wbroadcast', fordersWbroadcast);
+						console.log('send to driverNum: ' + driverNum);
+						driverSocket.emit('forders_wbroadcast', JSON.parse(fordersWbroadcast));
 					}
 				}
 
