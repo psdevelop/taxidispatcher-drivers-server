@@ -138,6 +138,7 @@ function queryRequest(sqlText, callbackSuccess, callbackError, connection) {
 
 	var useFordWbroadcast = false, //use_ford_wbroadcast
 		hasFordWbroadcast = false, //has_ford_wbroadcast
+		loadDriverDataWithWsocket = false, //load_driver_data_with_wsocket
 		fordersWbroadcast = '', driverSocket; //forders_wbroadcast
 
 	var connectionWbroadcast, createWBConnection = function() {
@@ -175,6 +176,7 @@ function queryRequest(sqlText, callbackSuccess, callbackError, connection) {
 		useFordWbroadcast = false;
 		hasFordWbroadcast = false;
 		fordersWbroadcast = '';
+		loadDriverDataWithWsocket = false;
 
 		if (broadcastIsProcessing) {
 			console.log('FordWbroadcast in processing! Next check after 10 sec...');
@@ -183,7 +185,7 @@ function queryRequest(sqlText, callbackSuccess, callbackError, connection) {
 
 		broadcastIsProcessing = true;
 		checkSystemSettings(function() {
-			if (useFordWbroadcast && hasFordWbroadcast && fordersWbroadcast) {
+			if (useFordWbroadcast && hasFordWbroadcast && fordersWbroadcast && loadDriverDataWithWsocket) {
 				console.log('fordersWbroadcasting: ' + fordersWbroadcast);
 
 				for (socketId in socketsParams) {
@@ -217,7 +219,7 @@ function queryRequest(sqlText, callbackSuccess, callbackError, connection) {
 	}
 
 	function checkSystemSettings(callBack) {
-		queryRequest('SELECT TOP 1 use_ford_wbroadcast, has_ford_wbroadcast, ' +
+		queryRequest('SELECT TOP 1 use_ford_wbroadcast, has_ford_wbroadcast, load_driver_data_with_wsocket, ' +
 			'forders_wbroadcast FROM Objekt_vyborki_otchyotnosti WHERE Tip_objekta=\'for_drivers\';',
 			function (recordset) {
 				if (recordset && recordset.recordset &&
@@ -229,6 +231,7 @@ function queryRequest(sqlText, callbackSuccess, callbackError, connection) {
 						useFordWbroadcast = setting.use_ford_wbroadcast;
 						hasFordWbroadcast = setting.has_ford_wbroadcast;
 						fordersWbroadcast = setting.forders_wbroadcast;
+						loadDriverDataWithWsocket = setting.load_driver_data_with_wsocket;
 					});
 
 					callBack && callBack();
