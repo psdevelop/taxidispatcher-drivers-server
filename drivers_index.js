@@ -477,7 +477,11 @@ io.sockets.on('connection', function (socket) {
 			return;
 		}
 
-		if (entity.indexOf('orders') === 0 && entity.indexOf('orders_coordinates') !== 0) {
+		if (entity.indexOf('rsst') === 0) {
+			socket.emit('rsst', {
+				userId: userId
+			});
+		} else if (entity.indexOf('orders') === 0 && entity.indexOf('orders_coordinates') !== 0) {
 			var baseCallback = function(dependData) {
 
 				var request = new sql.Request(connection),
@@ -772,6 +776,11 @@ io.sockets.on('connection', function (socket) {
 				emitData('orders');
 			},
 			connection);
+	});
+
+	socket.on('rqst', function (data) {
+		console.log('Answer to status request...');
+		emitData('rsst');
 	});
 
 	socket.on('disconnect', function () {
