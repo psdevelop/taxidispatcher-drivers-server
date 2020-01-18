@@ -694,22 +694,21 @@ io.sockets.on('connection', function (socket) {
 		connection = null;
 	}
 
-	function requestAndSendStatus(conn, cid, clphone, direct) {
+	function requestAndSendStatus(conn, did, direct) {
 		if (stReqTimeout <= 0 || direct) {
 			stReqTimeout = 20;
 			var request = new sql.Request(conn);
-			request.input('client_id', sql.Int, parseInt(cid));
+			request.input('driver_id', sql.Int, parseInt(did));
 			//request.input('adres', sql.VarChar(255), encoding.convert('привет мир','CP1251','UTF-8'));
-			request.input('phone', sql.VarChar(255), clphone);
-			request.input('full_data', sql.Int, 0);
+			request.input('show_phone', sql.Int, 1);
 			request.output('res', sql.VarChar(2000), '');
-			request.execute('GetJSONRClientStatus', function (err, recordsets, returnValue) {
+			request.execute('GetJSONDriverStatus', function (err, recordsets, returnValue) {
 				if (err) {
-					console.log(err.message);                      // Canceled.
+					console.log('requestAndSendStatus error: ' + err.message);                      // Canceled.
 					console.log(err.code);                         // ECANCEL //
 				} else {
 					var parameters = recordsets.output;
-					socket.emit('clstat', {cl_status: parameters.res});
+					socket.emit('rsst', JSON.parse(parameters.res));
 				}
 
 			});
@@ -719,7 +718,7 @@ io.sockets.on('connection', function (socket) {
 	}
 
 	socket.on('status', function (data) {
-		requestAndSendStatus(connection, data.cid);
+		requestAndSendStatus(connection, userId);
 		console.log("Status request: " + JSON.stringify(data));
 	});
 
@@ -778,9 +777,62 @@ io.sockets.on('connection', function (socket) {
 			connection);
 	});
 
+	function emitDriverEarlyOrders(driverId) {
+    queryRequest('SELECT dbo.GetJSONDriverEarlyOrders(' + driverId + ') as JSON_DATA',
+          function (recordset) {
+            if (recordset && recordset.recordset) {
+              socket.emit('early_orders', JSON.parse(recordset.recordset[0].JSON_DATA));
+              console.log('early_orders: ' + recordset.recordset[0].JSON_DATA);
+            }
+          },
+          function (err) {
+            //socket.emit('client_info', {error: err});
+            console.log('Error of early_orders get: ' + err);
+          },
+          connection);
+  }
+
 	socket.on('rqst', function (data) {
 		console.log('Answer to status request...');
-		emitData('rsst');
+		//emitData('rsst');
+		requestAndSendStatus(connection, userId);
+		emitDriverEarlyOrders(userId);
+	});
+
+	socket.on('taxometr_parameters', function (data) {
+		queryRequest('EXEC	[dbo].[SetOrderTaxometrParameters] @current_sum = ' + data.current_sum +
+			', @current_dist = ' + data.current_dist + ', @order_id = ' + data.order_id +
+			', @res = 0 OUTPUT',
+			function (recordset) {
+				console.log('Success of SetOrderTaxometrParameters');
+			},
+			function (err) {
+				console.log('Error of SetOrderTaxometrParameters: ' + err);
+			},
+			connection);
+		/*var request = new sql.Request(connection);
+
+		request.current_sum('phone', sql.VarChar(255), data.phone);
+		request.output('client_id', sql.Int, data.id);
+		request.output('req_trust', sql.Int, 0);
+		request.output('isagainr', sql.Int, 0);
+		request.output('acc_status', sql.Int, 0);
+		request.execute('CheckClientRegistration', function(err, recordsets, returnValue) {
+			if(err)	{
+				console.log('Error of CheckClientRegistration:'+err.message);                      // Canceled.
+				console.log('Error code:'+err.code);                         // ECANCEL //
+			}	else	{
+				var parameters = recordsets.output;
+				console.log('CheckClientRegistration result client_id='+parameters.client_id);
+				socket.emit('auth', { client_id: parameters.client_id,
+  						req_trust: parameters.req_trust,
+  						isagainr: parameters.isagainr,
+  						acc_status: parameters.acc_status,
+              client_token: parameters.client_id && parameters.client_id > 0 ? clientToken : ''
+						});
+			}
+
+		});*/
 	});
 
 	socket.on('disconnect', function () {
