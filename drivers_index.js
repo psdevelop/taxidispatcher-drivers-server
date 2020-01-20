@@ -503,7 +503,7 @@ io.sockets.on('connection', function (socket) {
 				function (recordset) {
 					if (recordset && recordset.recordset) {
 						socket.emit('sectors', JSON.parse(recordset.recordset[0].JSON_DATA));
-						console.log('sectors: ' + recordset.recordset[0].JSON_DATA);
+						console.log('sectors success');
 					}
 				},
 				function (err) {
@@ -515,7 +515,7 @@ io.sockets.on('connection', function (socket) {
 				function (recordset) {
 					if (recordset && recordset.recordset) {
 						socket.emit('tarifs_and_options', JSON.parse(recordset.recordset[0].JSON_DATA));
-						console.log('tarifs_and_options: ' + recordset.recordset[0].JSON_DATA);
+						console.log('tarifs_and_options success');
 					}
 				},
 				function (err) {
@@ -611,10 +611,10 @@ io.sockets.on('connection', function (socket) {
 
 								userId = recordset.recordset[0].BOLD_ID;
 
-								if (hasSocketWithUserId(userId)) {
-									abortConnection('Данный водитель уже подключен!');
-									return;
-								}
+								//if (hasSocketWithUserId(userId)) {
+								//	abortConnection('Данный водитель уже подключен!');
+								//	return;
+								//}
 
 								socketsParams[socket.id]['userId'] = userId;
 								socketsParams[socket.id]['socketObject'] = socket;
@@ -673,6 +673,7 @@ io.sockets.on('connection', function (socket) {
 	}
 
 	socket.on('ident', function (data) {
+		console.log('ident');
 		console.log(data);
 		console.log("=======");
 		console.log(typeof data);
@@ -695,7 +696,7 @@ io.sockets.on('connection', function (socket) {
 	}
 
 	function requestAndSendStatus(conn, did, direct) {
-		if (stReqTimeout <= 0 || direct) {
+		//if (stReqTimeout <= 0 || direct) {
 			stReqTimeout = 20;
 			var request = new sql.Request(conn);
 			request.input('driver_id', sql.Int, parseInt(did));
@@ -709,16 +710,17 @@ io.sockets.on('connection', function (socket) {
 				} else {
 					var parameters = recordsets.output;
 					socket.emit('rsst', JSON.parse(parameters.res));
+					console.log('active_orders success');
 				}
 
 			});
-		} else {
-			console.log("Too many requests from " + clphone);
-		}
+		//} else {
+			//console.log("Too many requests from " + did);
+		//}
 	}
 
 	socket.on('status', function (data) {
-		requestAndSendStatus(connection, userId);
+		requestAndSendStatus(connection, userId, true);
 		console.log("Status request: " + JSON.stringify(data));
 	});
 
@@ -782,7 +784,7 @@ io.sockets.on('connection', function (socket) {
           function (recordset) {
             if (recordset && recordset.recordset) {
               socket.emit('early_orders', JSON.parse(recordset.recordset[0].JSON_DATA));
-              console.log('early_orders: ' + recordset.recordset[0].JSON_DATA);
+              console.log('early_orders sucess!');
             }
           },
           function (err) {
@@ -793,15 +795,27 @@ io.sockets.on('connection', function (socket) {
   }
 
 	socket.on('rqst', function (data) {
-		console.log('Answer to status request...');
+		console.log('Answer to status request... userId=' + userId);
 		//emitData('rsst');
 		requestAndSendStatus(connection, userId);
 		emitDriverEarlyOrders(userId);
 	});
 
+	socket.on('active_orders', function (data) {
+		console.log('Answer to active orders status request... userId=' + userId);
+		//emitData('rsst');
+		requestAndSendStatus(connection, userId);
+	});
+
+	socket.on('early_orders', function (data) {
+		console.log('Answer to early orders status request... userId=' + userId);
+		//emitData('rsst');
+		emitDriverEarlyOrders(userId);
+	});
+
 	socket.on('taxometr_parameters', function (data) {
-		queryRequest('EXEC	[dbo].[SetOrderTaxometrParameters] @current_sum = ' + data.current_sum +
-			', @current_dist = ' + data.current_dist + ', @order_id = ' + data.order_id +
+		queryRequest('EXEC	[dbo].[SetOrderTaxometrParameters] @current_sum = ' + data.current_sum || 0 +
+			', @current_dist = ' + data.current_dist || 0 + ', @order_id = ' + data.order_id || 0 +
 			', @res = 0 OUTPUT',
 			function (recordset) {
 				console.log('Success of SetOrderTaxometrParameters');
