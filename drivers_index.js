@@ -815,8 +815,7 @@ io.sockets.on('connection', function (socket) {
 
 	socket.on('taxometr_parameters', function (data) {
 		queryRequest('EXEC	[dbo].[SetOrderTaxometrParameters] @current_sum = ' + data.current_sum || 0 +
-			', @current_dist = ' + data.current_dist || 0 + ', @order_id = ' + data.order_id || 0 +
-			', @res = 0 OUTPUT',
+			', @current_dist = ' + data.current_dist || 0 + ', @order_id = ' + data.order_id || 0,
 			function (recordset) {
 				console.log('Success of SetOrderTaxometrParameters');
 			},
