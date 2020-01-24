@@ -814,8 +814,12 @@ io.sockets.on('connection', function (socket) {
 	});
 
 	socket.on('taxometr_parameters', function (data) {
-		queryRequest('EXEC	[dbo].[SetOrderTaxometrParameters] @current_sum = ' + data.current_sum || 0 +
-			', @current_dist = ' + data.current_dist || 0 + ', @order_id = ' + data.order_id || 0,
+		var data = JSON.parse(data),
+			sql = 'EXEC	[dbo].[SetOrderTaxometrParameters] @current_sum = ' + (data.current_sum || 0) +
+			', @current_dist = ' + (data.current_dist || 0) + ', @order_id = ' + (data.order_id || 0);
+		//console.log(JSON.stringify(data));
+		//console.log(sql);
+		queryRequest(sql,
 			function (recordset) {
 				console.log('Success of SetOrderTaxometrParameters');
 			},
