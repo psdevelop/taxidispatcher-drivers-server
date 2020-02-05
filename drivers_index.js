@@ -816,7 +816,9 @@ io.sockets.on('connection', function (socket) {
 	socket.on('taxometr_parameters', function (data) {
 		var data = JSON.parse(data),
 			sql = 'EXEC	[dbo].[SetOrderTaxometrParameters] @current_sum = ' + (data.current_sum || 0) +
-			', @current_dist = ' + (data.current_dist || 0) + ', @order_id = ' + (data.order_id || 0);
+			', @current_dist = ' + (data.current_dist || 0) + ', @order_id = ' + (data.order_id || 0) +
+			', @current_time = ' + (data.current_time || 0) + ', @lat = ' + (data.lat || 0) + 
+			', @lon = ' + (data.lon || 0);
 		//console.log(JSON.stringify(data));
 		//console.log(sql);
 		queryRequest(sql,
