@@ -817,7 +817,7 @@ io.sockets.on('connection', function (socket) {
 		var data = JSON.parse(data),
 			sql = 'EXEC	[dbo].[SetOrderTaxometrParameters] @current_sum = ' + (data.current_sum || 0) +
 			', @current_dist = ' + (data.current_dist || 0) + ', @order_id = ' + (data.order_id || 0) +
-			', @current_time = ' + (data.current_time || 0) + ', @lat = ' + (data.lat || 0) + 
+			', @current_time = ' + (data.current_time || 0) + ', @lat = ' + (data.lat || 0) +
 			', @lon = ' + (data.lon || 0);
 		//console.log(JSON.stringify(data));
 		//console.log(sql);
@@ -853,6 +853,35 @@ io.sockets.on('connection', function (socket) {
 
 		});*/
 	});
+
+	socket.on('rate-client', function (data) {
+	  console.log(data);
+	  if(typeof data==='string')	{
+	    tp = tryParseJSON(data);
+	    if(tp)
+	      data = tp;
+	  }
+
+	  //console.log('cancel orders '+data.phone);
+	  if(true)	{
+	    var request2 = new sql.Request(connection);
+	    request2.query('EXEC	[dbo].[RateClient] @rate = ' + data.rate +', @client_id = ' + data.id,
+	    function(err, recordset) {
+	      if(err)	{
+	        socket.emit('req_rate_client_answer', { status: "ERROR" });
+	        console.log('req_rate_client_answer_error');
+	        console.log(err.message);                      // Canceled.
+	        console.log(err.code);                         // ECANCEL
+	      }
+	      else	{
+	        socket.emit('req_rate_client_answer', { status: "OK" });
+	        console.log('req_rate_client_answer_ok');
+	      }
+	    });
+	  }	else
+	    socket.emit('req_decline', { status: "many_rate_client_req" });
+	  //reqCancelTimeout=60;
+  });
 
 	socket.on('disconnect', function () {
 		socketsParams[socket.id] = {};
